@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { verbs } from '../data/verbs'
-import { gradeExam, isCorrectAnswer, normalize, scoreSpeed } from './game'
+import { createLetterMask, emptyProgress, gradeExam, isCorrectAnswer, learningProgress, normalize, recordLetterAttempt, scoreSpeed } from './game'
 
 describe('answer validation', () => {
   it('ignores whitespace and capitalization', () => expect(isCorrectAnswer(verbs[0], 'førnutid', '  HAR BEDT ')).toBe(true))
@@ -18,5 +18,31 @@ describe('scoring and exam', () => {
     const result = gradeExam(answers)
     expect(result).toHaveLength(40)
     expect(result.every((r) => r.correct)).toBe(true)
+  })
+})
+
+describe('beginner learning games', () => {
+  it('supports every verb in all beginner modes', () => {
+    expect(verbs).toHaveLength(10)
+    verbs.forEach((verb) => {
+      expect(verb.explanation.length).toBeGreaterThan(25)
+      expect(verb.example.danish).toBeTruthy()
+      expect(createLetterMask(verb.førnutid, 'easy').some((part) => part.hidden)).toBe(true)
+    })
+  })
+  it('keeps the auxiliary visible in easy and medium modes', () => {
+    for (const difficulty of ['easy', 'medium'] as const) {
+      const mask = createLetterMask('har drukket', difficulty)
+      expect(mask.slice(0, 3).every((part) => !part.hidden)).toBe(true)
+    }
+  })
+  it('never hides the first letter in easy mode', () => expect(createLetterMask('drikker', 'easy')[0].hidden).toBe(false))
+  it('tracks learning separately from exam mastery', () => {
+    const studied = { ...emptyProgress, learning: { ...emptyProgress.learning, studied: verbs.map((v) => v.infinitiv) } }
+    expect(learningProgress(studied)).toBe(33)
+    expect(studied.skills).toEqual({})
+    const attempted = recordLetterAttempt(studied, 'drikke', 'easy', false)
+    expect(attempted.learning.letters.drikke.easy?.wrong).toBe(1)
+    expect(attempted.skills).toEqual({})
   })
 })

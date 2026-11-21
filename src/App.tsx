@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import confetti from 'canvas-confetti'
-import { ArrowLeft, Brain, Check, Clock3, Crown, Flame, Gamepad2, Keyboard, Medal, Moon, RotateCcw, Sparkles, Star, Sun, Swords, Trophy, Volume2, VolumeX, X, Zap } from 'lucide-react'
+import { ArrowLeft, BookOpen, Brain, Check, ChevronLeft, ChevronRight, Clock3, Crown, Eye, EyeOff, Flame, Gamepad2, GripVertical, Keyboard, Layers3, Medal, Moon, Puzzle, RotateCcw, Sparkles, Star, Sun, Swords, Trophy, Volume1, Volume2, VolumeX, X, Zap } from 'lucide-react'
 import { tenseLabels, tenses, verbs, type Tense, type Verb } from './data/verbs'
-import { emptyProgress, gradeExam, isCorrectAnswer, levelForXp, masteryForVerb, overallMastery, plausibleOptions, recordAttempt, scoreSpeed, shuffle, weightedQuestions, type Progress, type SkillKey } from './lib/game'
+import { createLetterMask, emptyProgress, gradeExam, isCorrectAnswer, learningProgress, levelForXp, masteryForVerb, overallMastery, plausibleOptions, recordAttempt, recordLetterAttempt, scoreSpeed, shuffle, weightedQuestions, type Difficulty, type Progress, type SkillKey } from './lib/game'
 
-type Screen = 'home' | 'matching' | 'choice' | 'typing' | 'speed' | 'exam' | 'mistakes'
+type Screen = 'home' | 'study' | 'sort' | 'letters' | 'matching' | 'choice' | 'typing' | 'speed' | 'exam' | 'mistakes'
 const STORAGE_KEY = 'dansk-verb-battle-v1'
+
+const learningCards = [
+  { id: 'study' as Screen, title: 'Kynntu þér sögnina', kicker: 'Sjáðu svörin', desc: 'Skoðaðu beyginguna, skýringuna og einfalt dæmi.', icon: <BookOpen />, color: 'from-emerald-400 to-teal-600' },
+  { id: 'sort' as Screen, title: 'Raðaðu beygingunum', kicker: 'Þekktu mynstrið', desc: 'Settu sýnilegu beygingarnar á rétta staði.', icon: <Layers3 />, color: 'from-sky-400 to-cyan-600' },
+  { id: 'letters' as Screen, title: 'Fylltu í stafina', kicker: 'Byggðu orðið', desc: 'Fylltu í stafina með þeirri hjálp sem hentar þér.', icon: <Puzzle />, color: 'from-lime-400 to-emerald-600' }
+]
 
 const gameCards = [
   { id: 'matching' as Screen, title: 'Paraðu saman', kicker: 'Hitaðu upp', desc: 'Tengdu dönsku sagnirnar við íslensku þýðinguna.', icon: <Gamepad2 />, color: 'from-violet-500 to-indigo-600' },
@@ -17,7 +23,10 @@ const gameCards = [
 
 function useProgress() {
   const [progress, setProgress] = useState<Progress>(() => {
-    try { return { ...emptyProgress, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '') } } catch { return emptyProgress }
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '')
+      return { ...emptyProgress, ...saved, learning: { ...emptyProgress.learning, ...(saved.learning || {}) } }
+    } catch { return emptyProgress }
   })
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); document.documentElement.classList.toggle('dark', progress.dark) }, [progress])
   return [progress, setProgress] as const
@@ -27,6 +36,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [progress, setProgress] = useProgress()
   const mastery = overallMastery(progress)
+  const learnProgress = learningProgress(progress)
   const level = levelForXp(progress.xp)
 
   function completeGame(id: string, score: number, xp: number) {
@@ -41,6 +51,9 @@ function App() {
   }
 
   const common = { progress, setProgress, goHome: () => setScreen('home'), completeGame, tone }
+  if (screen === 'study') return <Shell {...common}><StudyGame {...common} /></Shell>
+  if (screen === 'sort') return <Shell {...common}><SortGame {...common} /></Shell>
+  if (screen === 'letters') return <Shell {...common}><LettersGame {...common} /></Shell>
   if (screen === 'matching') return <Shell {...common}><MatchingGame {...common} /></Shell>
   if (screen === 'choice') return <Shell {...common}><ChoiceGame {...common} /></Shell>
   if (screen === 'typing' || screen === 'mistakes') return <Shell {...common}><TypingGame {...common} mistakesOnly={screen === 'mistakes'} /></Shell>
@@ -74,7 +87,19 @@ function App() {
       </section>
 
       <section className="mt-10">
-        <div className="mb-5 flex items-end justify-between gap-4"><div><p className="eyebrow">Veldu áskorun</p><h2 className="text-3xl font-black">Fimm leiðir til að sigra sagnirnar</h2></div><span className="hidden text-sm font-bold text-slate-500 sm:block">Allir leikir eru opnir</span></div>
+        <div className="learn-intro mb-5"><div><p className="eyebrow">Lærðu</p><h2 className="text-3xl font-black">Byrjaðu hér ef þú ert ekki búin að læra sagnirnar</h2><p className="mt-2 font-semibold text-slate-500 dark:text-slate-300">Sjáðu svörin, raðaðu þeim og byggðu orðin smám saman. Enginn tími og engin refsing.</p></div><div className="learn-progress"><strong>{learnProgress}%</strong><span>Námsframvinda</span><ProgressBar value={learnProgress}/></div></div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {learningCards.map((game) => <button key={game.id} onClick={() => setScreen(game.id)} className="game-card learning-card group text-left">
+            <div className={`game-icon bg-gradient-to-br ${game.color}`}>{game.icon}</div>
+            <div className="mt-5 flex items-center justify-between"><span className="eyebrow">{game.kicker}</span></div>
+            <h3 className="mt-2 text-xl font-black">{game.title}</h3><p className="mt-2 min-h-12 text-sm font-semibold text-slate-500 dark:text-slate-400">{game.desc}</p>
+            <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800"><span className="font-extrabold text-emerald-700 dark:text-emerald-300">Læra</span><span className="text-xs font-bold text-slate-400">Allar 10 sagnir</span></div>
+          </button>)}
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <div className="mb-5 flex items-end justify-between gap-4"><div><p className="eyebrow">Prófaðu þig</p><h2 className="text-3xl font-black">Fimm leiðir til að prófa minnið</h2></div><span className="hidden text-sm font-bold text-slate-500 sm:block">Allir leikir eru opnir</span></div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {gameCards.map((game, index) => <button key={game.id} onClick={() => setScreen(game.id)} className={`game-card group text-left ${index === 4 ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
             <div className={`game-icon bg-gradient-to-br ${game.color}`}>{game.icon}</div>
@@ -108,6 +133,86 @@ function Shell({ children, progress, setProgress, goHome, home = false }: Common
 
 function GameFrame({ title, eyebrow, goHome, children, aside }: { title: string; eyebrow: string; goHome: () => void; children: ReactNode; aside?: ReactNode }) {
   return <main className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6 sm:py-10"><button onClick={goHome} className="mb-6 inline-flex min-h-11 items-center gap-2 font-extrabold text-slate-500 hover:text-violet-600"><ArrowLeft size={19}/> Til baka</button><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">{eyebrow}</p><h1 className="text-3xl font-black sm:text-4xl">{title}</h1></div>{aside}</div>{children}</main>
+}
+
+function VerbPicker({ current, done, onSelect }: { current: string; done: string[]; onSelect: (verb: string) => void }) {
+  return <div className="verb-picker" aria-label="Veldu sögn">{verbs.map((verb) => <button key={verb.infinitiv} onClick={() => onSelect(verb.infinitiv)} className={`${current === verb.infinitiv ? 'active' : ''} ${done.includes(verb.infinitiv) ? 'done' : ''}`}>{done.includes(verb.infinitiv) && <Check size={14}/>} {verb.infinitiv}</button>)}</div>
+}
+
+function StudyGame({ progress, setProgress, goHome }: CommonProps) {
+  const [index, setIndex] = useState(0); const [flipped, setFlipped] = useState(false); const verb = verbs[index]
+  const studied = progress.learning.studied
+  const speechAvailable = typeof window !== 'undefined' && 'speechSynthesis' in window
+  function select(name: string) { setIndex(verbs.findIndex((v) => v.infinitiv === name)); setFlipped(false) }
+  function move(direction: number) { setIndex((i) => (i + direction + verbs.length) % verbs.length); setFlipped(false) }
+  function markStudied() { setProgress((p) => ({ ...p, learning: { ...p.learning, studied: [...new Set([...p.learning.studied, verb.infinitiv])] } })) }
+  function speak() { if (!speechAvailable) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(`${verb.infinitiv}. ${verb.nutid}. ${verb.datid}. ${verb.førnutid}.`); utterance.lang = 'da-DK'; utterance.rate = .78; window.speechSynthesis.speak(utterance) }
+  return <GameFrame title="Kynntu þér sögnina" eyebrow="Sjáðu og skildu" goHome={goHome} aside={<span className="score-chip">{studied.length}/10 skoðaðar</span>}>
+    <ProgressBar value={studied.length * 10}/><VerbPicker current={verb.infinitiv} done={studied} onSelect={select}/>
+    <div className={`study-card mt-6 ${flipped ? 'flipped' : ''}`}>
+      <div className="study-card-inner">
+        <section className="study-face study-front" aria-hidden={flipped}>
+          <div className="study-orb">{index + 1}</div><p className="eyebrow">Danska → íslenska</p><h2>{verb.infinitiv}</h2><p className="study-translation">{verb.translation}</p>
+          <div className="forms-grid"><div><span>Nutid</span><strong>{verb.nutid}</strong></div><div><span>Datid</span><strong>{verb.datid}</strong></div><div><span>Førnutid</span><strong>{verb.førnutid}</strong></div></div>
+          <p className="study-prompt">Snúðu kortinu til að sjá skýringu og dæmi.</p>
+        </section>
+        <section className="study-face study-back" aria-hidden={!flipped}>
+          <p className="eyebrow">Minnishjálp</p><h3>{verb.infinitiv} – {verb.translation}</h3><p className="study-explanation">{verb.explanation}</p>
+          <div className="example-box"><span>Dæmi</span><strong lang="da">{verb.example.danish}</strong><p>{verb.example.icelandic}</p></div>
+        </section>
+      </div>
+    </div>
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><button className="btn-secondary" onClick={() => move(-1)}><ChevronLeft/> Fyrri</button><div className="flex flex-wrap justify-center gap-2">{speechAvailable && <button className="btn-secondary" onClick={speak}><Volume1/> Hlusta</button>}<button className="btn-primary" onClick={() => setFlipped((v) => !v)}>{flipped ? <EyeOff/> : <Eye/>}{flipped ? 'Sjá beygingu' : 'Sjá skýringu'}</button></div><button className="btn-secondary" onClick={() => move(1)}>Næsta <ChevronRight/></button></div>
+    <button className={`studied-button ${studied.includes(verb.infinitiv) ? 'complete' : ''}`} onClick={markStudied}>{studied.includes(verb.infinitiv) ? <><Check/> Þú hefur skoðað þessa sögn</> : <><BookOpen/> Ég hef skoðað þessa sögn</>}</button>
+  </GameFrame>
+}
+
+function SortGame({ progress, setProgress, goHome, tone }: CommonProps) {
+  const [index, setIndex] = useState(0); const verb = verbs[index]; const [selected, setSelected] = useState<string | null>(null); const [slots, setSlots] = useState<Partial<Record<Tense, string>>>({}); const [checked, setChecked] = useState(false)
+  const tiles = useMemo(() => shuffle(tenses.map((tense) => verb[tense])), [verb]); const used = new Set(Object.values(slots)); const done = progress.learning.sorted
+  const complete = tenses.every((tense) => slots[tense] === verb[tense])
+  function chooseVerb(name: string) { setIndex(verbs.findIndex((v) => v.infinitiv === name)); setSlots({}); setSelected(null); setChecked(false) }
+  function place(tense: Tense) { if (!selected) return; setSlots((s) => ({ ...s, [tense]: selected })); setSelected(null); setChecked(false) }
+  function remove(tense: Tense) { setSlots((s) => { const next = { ...s }; delete next[tense]; return next }); setChecked(false) }
+  function check() { setChecked(true); tone(complete); if (complete) setProgress((p) => ({ ...p, learning: { ...p.learning, sorted: [...new Set([...p.learning.sorted, verb.infinitiv])] } })) }
+  function next() { chooseVerb(verbs[(index + 1) % verbs.length].infinitiv) }
+  return <GameFrame title="Raðaðu beygingunum" eyebrow="Sjáðu og raðaðu" goHome={goHome} aside={<span className="score-chip">{done.length}/10 lokið</span>}>
+    <ProgressBar value={done.length * 10}/><VerbPicker current={verb.infinitiv} done={done} onSelect={chooseVerb}/>
+    <div className="question-card mt-6"><div className="text-center"><p className="eyebrow">Raðaðu rétt</p><h2 className="mt-2 text-5xl font-black text-sky-700 dark:text-sky-300">{verb.infinitiv}</h2><p className="mt-2 text-lg font-bold text-slate-500">{verb.translation}</p></div>
+      <div className="sort-targets">{tenses.map((tense) => { const value = slots[tense]; const isWrong = checked && value !== verb[tense]; return <button key={tense} onDragOver={(e) => e.preventDefault()} onDrop={() => place(tense)} onClick={() => value ? remove(tense) : place(tense)} className={`sort-target ${value ? 'filled' : ''} ${isWrong ? 'wrong' : ''} ${checked && value === verb[tense] ? 'correct' : ''}`}><span>{tenseLabels[tense]}</span><strong>{value || (selected ? 'Setja hér' : 'Veldu flís')}</strong>{value && <small>Ýttu til að færa</small>}</button> })}</div>
+      <div className="sort-tiles" aria-label="Beygingar sem á að raða">{tiles.filter((tile) => !used.has(tile)).map((tile) => <button draggable key={tile} onDragStart={() => setSelected(tile)} onClick={() => { setSelected(tile); setChecked(false) }} className={`sort-tile ${selected === tile ? 'selected' : ''}`}><GripVertical/>{tile}</button>)}</div>
+      {checked && <div className={`feedback ${complete ? 'good' : 'bad'}`}><strong>{complete ? 'Allt á réttum stað! Skoðaðu heildarmyndina.' : 'Næstum því. Rauðu flísarnar mega færast – öll svörin eru enn sýnileg.'}</strong>{complete && <button className="btn-primary" onClick={next}>Næsta sögn</button>}</div>}
+      {complete && checked && <div className="conjugation-line"><strong>{verb.infinitiv}</strong><span>{verb.nutid}</span><span>{verb.datid}</span><span>{verb.førnutid}</span></div>}
+      {!checked && <div className="mt-6 flex justify-center"><button className="btn-primary" disabled={!tenses.every((tense) => slots[tense])} onClick={check}><Check/> Athuga röðun</button></div>}
+      <p className="mt-5 rounded-2xl bg-sky-50 p-4 font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-100">{verb.explanation}</p>
+    </div>
+  </GameFrame>
+}
+
+function MissingWord({ answer, difficulty, values, prefix, revealWrong, setValue }: { answer: string; difficulty: Difficulty; values: Record<string, string>; prefix: string; revealWrong: boolean; setValue: (key: string, value: string) => void }) {
+  const mask = useMemo(() => createLetterMask(answer, difficulty), [answer, difficulty])
+  return <div className="missing-word" aria-label={`Fylltu í ${answer.length} stafa orð`}>{mask.map((item, index) => item.char === ' ' ? <span className="word-space" key={index}/> : item.hidden ? <input key={index} aria-label={`Stafur ${index + 1}`} maxLength={1} value={values[`${prefix}:${index}`] || ''} onChange={(e) => setValue(`${prefix}:${index}`, e.target.value.slice(-1))} className={revealWrong && (values[`${prefix}:${index}`] || '').toLocaleLowerCase('da-DK') !== item.char.toLocaleLowerCase('da-DK') ? 'wrong' : ''}/> : <span key={index}>{item.char}</span>)}</div>
+}
+
+function LettersGame({ progress, setProgress, goHome, tone }: CommonProps) {
+  const weakOrder = useMemo(() => [...verbs].sort((a, b) => { const aw = Object.values(progress.learning.letters[a.infinitiv] || {}).reduce((s, v) => s + (v?.wrong || 0), 0); const bw = Object.values(progress.learning.letters[b.infinitiv] || {}).reduce((s, v) => s + (v?.wrong || 0), 0); return bw - aw }), []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [verbName, setVerbName] = useState(weakOrder[0].infinitiv); const [difficulty, setDifficulty] = useState<Difficulty>('easy'); const [values, setValues] = useState<Record<string, string>>({}); const [tried, setTried] = useState(false); const [complete, setComplete] = useState(false); const [hint, setHint] = useState(false)
+  const verb = verbs.find((v) => v.infinitiv === verbName)!; const completedVerbs = verbs.filter((v) => Object.values(progress.learning.letters[v.infinitiv] || {}).some((s) => s && s.correct > 0)).map((v) => v.infinitiv)
+  function reset(nextVerb = verbName, nextDifficulty = difficulty) { setVerbName(nextVerb); setDifficulty(nextDifficulty); setValues({}); setTried(false); setComplete(false); setHint(false) }
+  function assembled(answer: string, prefix: string) { return createLetterMask(answer, difficulty).map((item, index) => item.hidden ? values[`${prefix}:${index}`] || '' : item.char).join('') }
+  function check() { const correct = tenses.every((tense) => assembled(verb[tense], tense) === verb[tense]); setTried(true); setComplete(correct); setProgress((p) => recordLetterAttempt(p, verb.infinitiv, difficulty, correct)); tone(correct) }
+  function next() { const index = verbs.findIndex((v) => v.infinitiv === verb.infinitiv); reset(verbs[(index + 1) % verbs.length].infinitiv) }
+  return <GameFrame title="Fylltu í stafina" eyebrow="Byggðu orðin smám saman" goHome={goHome} aside={<span className="score-chip">{completedVerbs.length}/10 æfðar</span>}>
+    <VerbPicker current={verb.infinitiv} done={completedVerbs} onSelect={(name) => reset(name)}/>
+    <div className="difficulty-picker" aria-label="Erfiðleikastig">{([['easy','Auðvelt'],['medium','Miðlungs'],['hard','Erfitt']] as [Difficulty,string][]).map(([key,label]) => <button className={difficulty === key ? 'active' : ''} key={key} onClick={() => reset(verbName, key)}>{label}</button>)}</div>
+    <div className="question-card mt-5"><div className="text-center"><p className="eyebrow">Fylltu í auðu reitina</p><h2 className="mt-2 text-5xl font-black text-emerald-700 dark:text-emerald-300">{verb.infinitiv}</h2><p className="mt-2 text-lg font-bold text-slate-500">{verb.translation}</p></div>
+      <div className="missing-lines">{tenses.map((tense) => <div key={tense}><span>{tenseLabels[tense]}</span>{complete ? <strong className="full-answer">{verb[tense]}</strong> : <MissingWord answer={verb[tense]} difficulty={difficulty} values={values} prefix={tense} revealWrong={tried} setValue={(key, value) => { setValues((v) => ({ ...v, [key]: value })); setTried(false) }}/>}</div>)}</div>
+      {difficulty === 'hard' && !complete && <div className="text-center"><button className="btn-secondary" onClick={() => setHint((v) => !v)}><Sparkles/> {hint ? 'Fela vísbendingu' : 'Sýna vísbendingu'}</button>{hint && <div className="hint-box">{verb.nutid} · {verb.datid} · {verb.førnutid}</div>}</div>}
+      {tried && !complete && <div className="feedback bad"><strong>Ekki alveg. Skoðaðu merktu reitina og prófaðu aftur – engin stig tapast.</strong></div>}
+      {complete && <div className="feedback good"><strong>Rétt! Þú byggðir allar þrjár beygingarnar.</strong><button className="btn-primary" onClick={next}>Næsta sögn</button></div>}
+      {!complete && <div className="mt-6 flex justify-center"><button className="btn-primary" onClick={check}><Check/> Athuga stafina</button></div>}
+    </div>
+  </GameFrame>
 }
 
 function MatchingGame({ progress, setProgress, goHome, completeGame, tone }: CommonProps) {

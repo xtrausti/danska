@@ -1,7 +1,13 @@
 import { tenses, verbs, type Tense, type Verb } from '../data/verbs'
 
 export type SkillKey = Tense | 'translation'
+export type Difficulty = 'easy' | 'medium' | 'hard'
 export type SkillStats = { correct: number; wrong: number }
+export type LearningProgress = {
+  studied: string[]
+  sorted: string[]
+  letters: Record<string, Partial<Record<Difficulty, SkillStats>>>
+}
 export type Progress = {
   xp: number
   stars: number
@@ -13,10 +19,12 @@ export type Progress = {
   mistakes: { verb: string; skill: SkillKey }[]
   sound: boolean
   dark: boolean
+  learning: LearningProgress
 }
 
 export const emptyProgress: Progress = {
-  xp: 0, stars: 0, streak: 0, lastPractice: null, best: {}, completed: {}, skills: {}, mistakes: [], sound: true, dark: false
+  xp: 0, stars: 0, streak: 0, lastPractice: null, best: {}, completed: {}, skills: {}, mistakes: [], sound: true, dark: false,
+  learning: { studied: [], sorted: [], letters: {} }
 }
 
 export const normalize = (value: string) => value.trim().toLocaleLowerCase('da-DK').replace(/\s+/g, ' ')
@@ -108,4 +116,38 @@ export function levelForXp(xp: number) {
 
 export function plausibleOptions(verb: Verb, tense: Tense) {
   return shuffle([verb[tense], ...shuffle(verbs.filter((v) => v.infinitiv !== verb.infinitiv).map((v) => v[tense])).slice(0, 3)])
+}
+
+export function createLetterMask(answer: string, difficulty: Difficulty) {
+  const chars = [...answer]
+  const ratio = difficulty === 'easy' ? .25 : difficulty === 'medium' ? .45 : .75
+  const auxiliaryEnd = answer.indexOf(' ')
+  const candidates = chars.map((char, index) => ({ char, index })).filter(({ char, index }) => {
+    if (char === ' ') return false
+    if (difficulty === 'easy' && index === 0) return false
+    if (difficulty !== 'hard' && auxiliaryEnd > 0 && index < auxiliaryEnd) return false
+    return true
+  })
+  const seed = [...answer].reduce((sum, char) => sum + char.charCodeAt(0), difficulty.length * 19)
+  const ordered = [...candidates].sort((a, b) => ((a.index * 31 + seed) % 97) - ((b.index * 31 + seed) % 97))
+  const hideCount = Math.max(1, Math.min(candidates.length - (difficulty === 'easy' ? 1 : 0), Math.round(candidates.length * ratio)))
+  const hidden = new Set(ordered.slice(0, hideCount).map((item) => item.index))
+  return chars.map((char, index) => ({ char, hidden: hidden.has(index) }))
+}
+
+export function recordLetterAttempt(progress: Progress, verb: string, difficulty: Difficulty, correct: boolean) {
+  const next = structuredClone(progress)
+  const current = next.learning.letters[verb]?.[difficulty] || { correct: 0, wrong: 0 }
+  next.learning.letters[verb] = {
+    ...(next.learning.letters[verb] || {}),
+    [difficulty]: { correct: current.correct + (correct ? 1 : 0), wrong: current.wrong + (correct ? 0 : 1) }
+  }
+  return updatePracticeDate(next)
+}
+
+export function learningProgress(progress: Progress) {
+  const studied = new Set(progress.learning.studied).size
+  const sorted = new Set(progress.learning.sorted).size
+  const letters = verbs.filter((verb) => Object.values(progress.learning.letters[verb.infinitiv] || {}).some((stats) => stats && stats.correct > 0)).length
+  return Math.round(((studied + sorted + letters) / 30) * 100)
 }

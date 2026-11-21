@@ -4,6 +4,14 @@ Leikjamiðuð æfingasíða fyrir 10 danskar óreglulegar sagnir. Viðmótið er
 
 ## Leikhamir
 
+### Lærðu
+
+- Kynntu þér sögnina – gagnvirk námsspjöld með skýringum, dæmum og framburði
+- Raðaðu beygingunum – snerti- og dragröðun með öll svör sýnileg
+- Fylltu í stafina – þrjú hjálparstig án tímamarka eða refsinga
+
+### Prófaðu þig
+
 - Paraðu saman – dönsk nafnháttarmynd og íslensk þýðing
 - Veldu rétta beygingu – nutid, datid og førnutid
 - Skrifaðu rétt – virk upprifjun án svarmöguleika
