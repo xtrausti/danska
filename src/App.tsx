@@ -35,6 +35,7 @@ function useProgress() {
 function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [progress, setProgress] = useProgress()
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }) }, [screen])
   const mastery = overallMastery(progress)
   const learnProgress = learningProgress(progress)
   const level = levelForXp(progress.xp)
